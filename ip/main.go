@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -29,7 +30,12 @@ func main() {
 	}
 	result := FindCNIPNet(data)
 	result = AddReservedBlock(result)
+	result = Reverse(result)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].IP < result[j].IP
+	})
 	log.Println(result)
+	log.Println(len(result))
 }
 func FetchData(path string) (string, error) {
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
@@ -125,6 +131,62 @@ func AddReservedBlock(origin []*IPBlock) []*IPBlock {
 	return b
 }
 
+type Bit struct {
+	// 0
+	Zero *Bit
+	// 1
+	One *Bit
+}
+
 func Reverse(origin []*IPBlock) []*IPBlock {
-	return nil
+	root := &Bit{}
+	for _, o := range origin {
+		Generate(root, o)
+	}
+	result := make([]*IPBlock, 0, len(origin))
+	Merge(&result, root, 0, 0)
+	return result
+}
+
+func Generate(root *Bit, b *IPBlock) {
+	current := root
+	mask := uint32(0x80000000)
+	for i := 0; i < int(b.Mask); i++ {
+		if b.IP&mask > 0 {
+			if current.One == nil {
+				current.One = &Bit{}
+			}
+			current = current.One
+		} else {
+			if current.Zero == nil {
+				current.Zero = &Bit{}
+			}
+			current = current.Zero
+		}
+		mask >>= 1
+	}
+}
+
+func Merge(result *[]*IPBlock, current *Bit, parent uint32, level uint) {
+	if current.One == nil && current.Zero == nil {
+		return
+	}
+	if current.One != nil {
+		Merge(result, current.One, parent+1<<(31-level), level+1)
+	}
+	if current.Zero != nil {
+		Merge(result, current.Zero, parent, level+1)
+	}
+	if current.One != nil && current.Zero != nil {
+		return
+	}
+	ip := parent
+	mask := level + 1
+	if current.One == nil {
+		ip += 1 << (31 - level)
+	}
+	*result = append(*result, &IPBlock{
+		IP:   ip,
+		Mask: byte(mask),
+	})
 }
