@@ -34,8 +34,9 @@ func main() {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].IP < result[j].IP
 	})
-	log.Println(result)
-	log.Println(len(result))
+	for _, r := range result {
+		fmt.Println(r)
+	}
 }
 func FetchData(path string) (string, error) {
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
